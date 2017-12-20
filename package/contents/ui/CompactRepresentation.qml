@@ -12,15 +12,24 @@ Item {
 
     readonly property string selectedAdapter: plasmoid.configuration.adapter
 
-    property double itemWidth:  parent === null ? 0 : vertical ? parent.width : parent.height
-    property double itemHeight: itemWidth
-
-    Layout.preferredWidth: bandwidthStatusLabel.width
-    Layout.preferredHeight: itemHeight
+    Layout.preferredWidth: ssidLabel.width >= bandwidthLabel.width ? ssidLabel.width : bandwidthLabel.width
+    Layout.preferredHeight: parent.height
 
     property string commandResultStdout: ''
     property string currentSSID: 'None'
     property string currentUsage: '0B'
+
+    Plasmoid.toolTipTextFormat: Text.RichText
+
+    function updateTooltip(parsedSSIDStat) {
+        var toolTipSubText = Utils.tabularSSIDStat(parsedSSIDStat)
+
+        Plasmoid.toolTipSubText = toolTipSubText
+    }
+
+    function updateStats() {
+        commandResultsDS.exec("ssidstat --active --json")
+    }
 
     PlasmaCore.DataSource {
         id: commandResultsDS
@@ -41,7 +50,6 @@ Item {
         signal exited(string sourceName, string stdout)
     }
 
-
     Connections {
         target: commandResultsDS
         onExited: {
@@ -49,16 +57,38 @@ Item {
 
             currentUsage = parsedSSIDStat["data"][selectedAdapter]["Total"]
             currentSSID = parsedSSIDStat["data"][selectedAdapter]["SSID"]
+
+            updateTooltip(parsedSSIDStat)
         }
     }
 
-    PlasmaComponents.Label {
-        id: bandwidthStatusLabel
-        anchors.centerIn: parent
-        visible: plasmoid.configuration.useDefaultIcons
-        font.pointSize: -1
+    GridLayout {
+        id: gridLayout
+        anchors.fill: parent
 
-        text: currentSSID + ': ' + currentUsage
+        property int spacing: 4 * units.devicePixelRatio
+        columnSpacing: spacing
+        rowSpacing: -spacing
+
+        columns: 1
+        
+        PlasmaComponents.Label {
+            id: ssidLabel
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: plasmoid.configuration.useDefaultIcons
+            font.pointSize: -1
+
+            text: currentSSID + " (" + selectedAdapter + ")"
+        }
+
+        PlasmaComponents.Label {
+            id: bandwidthLabel
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: plasmoid.configuration.useDefaultIcons
+            font.pointSize: -1
+
+            text: currentUsage
+        }
     }
 
     Timer {
@@ -68,11 +98,15 @@ Item {
         running: true
 
         onTriggered: {
-            commandResultsDS.exec("ssidstat --active --json")
+            updateStats()
         }
     }
 
     onSelectedAdapterChanged: {
-        commandResultsDS.exec("ssidstat --active --json")
+        updateStats()
+    }
+
+    Component.onCompleted: {
+        updateStats()
     }
 }
